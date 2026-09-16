@@ -1,7 +1,11 @@
 """Tests for runtime quality settings."""
 
 import pytest
-from wyoming_pocket_tts.settings import QUALITY_PROFILES, decode_steps_for_quality
+from wyoming_pocket_tts.settings import (
+    QUALITY_PROFILES,
+    decode_steps_for_quality,
+    decode_steps_parameter,
+)
 
 
 def test_quality_profiles_increase_decode_steps():
@@ -39,3 +43,19 @@ def test_invalid_decode_step_override_is_rejected(steps: int):
 def test_unknown_quality_profile_is_rejected():
     with pytest.raises(ValueError):
         decode_steps_for_quality("ultra")
+
+
+def test_new_decode_steps_parameter_is_preferred():
+    assert (
+        decode_steps_parameter({"lsd_decode_steps", "sampler_decode_steps"})
+        == "sampler_decode_steps"
+    )
+
+
+def test_pocket_tts_21_decode_steps_parameter_is_supported():
+    assert decode_steps_parameter({"language", "lsd_decode_steps"}) == "lsd_decode_steps"
+
+
+def test_missing_decode_steps_parameter_is_rejected():
+    with pytest.raises(RuntimeError):
+        decode_steps_parameter({"language", "temp"})
