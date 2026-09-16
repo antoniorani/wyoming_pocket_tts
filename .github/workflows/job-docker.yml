@@ -79,11 +79,23 @@ jobs:
         steps:
             - uses: actions/checkout@v7
 
-            - name: Extract version from pyproject.toml
+            - name: Extract and validate app version
               id: version
               run: |
-                  version=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
-                  echo "version=$version" >> "$GITHUB_OUTPUT"
+                  app_version=$(awk '$1 == "version:" {print $2; exit}' config.yaml)
+                  runtime_version=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' wyoming_pocket_tts/__init__.py)
+
+                  if [ -z "$app_version" ] || [ -z "$runtime_version" ]; then
+                      echo "Could not determine app/runtime version" >&2
+                      exit 1
+                  fi
+
+                  if [ "$app_version" != "$runtime_version" ]; then
+                      echo "Version mismatch: config.yaml=$app_version runtime=$runtime_version" >&2
+                      exit 1
+                  fi
+
+                  echo "version=$app_version" >> "$GITHUB_OUTPUT"
 
             - name: Download digests
               uses: actions/download-artifact@v8
