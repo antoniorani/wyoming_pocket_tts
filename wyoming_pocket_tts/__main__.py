@@ -21,6 +21,7 @@ from .handler import (
     normalize_language,
     plan_voices,
 )
+from .settings import QUALITY_PROFILES, sampler_decode_steps_for_quality
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -70,10 +71,27 @@ async def main() -> None:
         default="en",
         help=(
             "Language to use (default: en). Supported: en, fr, de, pt, it, es, "
-            "fr_24l, de_24l, pt_24l, "
-            "plus upstream names english, french, german, portuguese, italian, "
-            "spanish and 24l preview variants. Custom/cloned voices are loaded "
-            "through the selected language model."
+            "fr_24l, de_24l, pt_24l, it_24l, es_24l, plus upstream language "
+            "names. The 24-layer models prioritise quality over speed. Custom "
+            "voices are loaded through the selected language model."
+        ),
+    )
+    parser.add_argument(
+        "--quality",
+        default="balanced",
+        choices=tuple(QUALITY_PROFILES),
+        help=(
+            "Generation quality profile. More quality uses more sampler decode "
+            "steps and is slower (default: balanced)."
+        ),
+    )
+    parser.add_argument(
+        "--sampler-decode-steps",
+        type=int,
+        default=None,
+        help=(
+            "Advanced: override the quality profile with an explicit Pocket TTS "
+            "sampler decode step count (1-32)."
         ),
     )
     parser.add_argument(
@@ -107,12 +125,29 @@ async def main() -> None:
         _LOGGER.info("Using HuggingFace token from environment")
         os.environ["HF_TOKEN"] = hf_token
 
+    try:
+        sampler_decode_steps = sampler_decode_steps_for_quality(
+            args.quality,
+            args.sampler_decode_steps,
+        )
+    except ValueError as err:
+        parser.error(str(err))
+
     _LOGGER.info("Starting Wyoming Pocket TTS server v%s", __version__)
     args.language = normalize_language(args.language)
-    _LOGGER.info("Loading Pocket TTS model for language: %s", args.language)
+    _LOGGER.info(
+        "Loading Pocket TTS model for language: %s | quality: %s | decode steps: %d",
+        args.language,
+        args.quality if args.sampler_decode_steps is None else "custom",
+        sampler_decode_steps,
+    )
 
-    # Load model
-    model = TTSModel.load_model(language=args.language).to(args.device)
+    # Load model. Pocket TTS documents that more sampler decode steps can improve
+    # output quality at the cost of additional computation.
+    model = TTSModel.load_model(
+        language=args.language,
+        sampler_decode_steps=sampler_decode_steps,
+    ).to(args.device)
     _LOGGER.info(
         "Model loaded successfully (sample rate: %d Hz, device: %s)",
         model.sample_rate,
