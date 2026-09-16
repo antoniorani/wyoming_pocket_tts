@@ -47,11 +47,9 @@ jobs:
             # The container driver is needed for gha layer caching (the default
             # docker driver can't export a build cache).
             - name: Set up Docker Buildx
-              if: steps.gate.outputs.enabled == 'true'
               uses: docker/setup-buildx-action@v4
 
             - name: Build image
-              if: steps.gate.outputs.enabled == 'true'
               uses: docker/build-push-action@v7
               with:
                   context: .
@@ -59,6 +57,14 @@ jobs:
                   tags: wyoming-pocket-tts:e2e
                   cache-from: type=gha,scope=e2e
                   cache-to: type=gha,scope=e2e,mode=max
+
+            # Regression guard for #39: importing Pocket TTS must work from the
+            # optimized runtime image even when no HF token is available.
+            - name: Smoke-test runtime import
+              run: |
+                  docker run --rm --entrypoint python \
+                    wyoming-pocket-tts:e2e \
+                    -c "from pocket_tts import TTSModel; print('runtime import OK')"
 
             # Cache the downloaded model + gated cloning weights across runs so
             # only the first E2E pays the ~450MB download.
