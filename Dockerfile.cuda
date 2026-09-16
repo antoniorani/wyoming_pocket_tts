@@ -48,6 +48,12 @@ RUN rm -rf /usr/local/lib/python3.13/site-packages/networkx \
 # ============================================
 FROM nvidia/cuda:12.6.3-runtime-ubuntu24.04
 
+ARG BUILD_VERSION
+ARG BUILD_ARCH
+LABEL io.hass.version="${BUILD_VERSION}" \
+      io.hass.type="app" \
+      io.hass.arch="${BUILD_ARCH}"
+
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Install Python 3.13 + minimal runtime deps
