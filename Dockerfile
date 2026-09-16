@@ -59,6 +59,12 @@ RUN rm -rf /usr/local/lib/python3.13/site-packages/networkx \
 # ============================================
 FROM python:3.13-slim-bookworm
 
+ARG BUILD_VERSION
+ARG BUILD_ARCH
+LABEL io.hass.version="${BUILD_VERSION}" \
+      io.hass.type="app" \
+      io.hass.arch="${BUILD_ARCH}"
+
 # Set shell
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
