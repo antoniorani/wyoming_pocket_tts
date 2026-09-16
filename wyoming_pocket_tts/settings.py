@@ -1,5 +1,7 @@
 """Runtime settings for Wyoming Pocket TTS."""
 
+from collections.abc import Collection
+
 QUALITY_PROFILES: dict[str, int] = {
     "fast": 1,
     "balanced": 2,
@@ -30,3 +32,18 @@ def decode_steps_for_quality(
         raise ValueError(
             f"unknown quality profile {quality!r}; choose one of: {supported}"
         ) from exc
+
+
+def decode_steps_parameter(parameter_names: Collection[str]) -> str:
+    """Return the decode-step keyword supported by the installed Pocket TTS.
+
+    Pocket TTS 2.1 uses ``lsd_decode_steps``. Newer releases renamed the public
+    keyword to ``sampler_decode_steps`` while retaining the old name as a
+    compatibility alias. Prefer the new spelling when available so newer
+    versions do not emit a deprecation warning.
+    """
+    if "sampler_decode_steps" in parameter_names:
+        return "sampler_decode_steps"
+    if "lsd_decode_steps" in parameter_names:
+        return "lsd_decode_steps"
+    raise RuntimeError("installed Pocket TTS exposes no decode-step parameter")
