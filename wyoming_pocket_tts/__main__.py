@@ -3,10 +3,11 @@
 
 import argparse
 import asyncio
+import inspect
 import logging
 import os
 from functools import partial
-from typing import cast
+from typing import Any, cast
 
 from pocket_tts import TTSModel
 from wyoming.server import AsyncTcpServer
@@ -21,7 +22,11 @@ from .handler import (
     normalize_language,
     plan_voices,
 )
-from .settings import QUALITY_PROFILES, decode_steps_for_quality
+from .settings import (
+    QUALITY_PROFILES,
+    decode_steps_for_quality,
+    decode_steps_parameter,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -139,13 +144,16 @@ async def main() -> None:
         decode_steps,
     )
 
-    # Pocket TTS 2.1.0 calls this parameter ``lsd_decode_steps``. Newer releases
-    # keep that name as a deprecated compatibility alias for
-    # ``sampler_decode_steps``, so using the old keyword here works across both
-    # APIs while this project is still locked to 2.1.0 for development/testing.
-    model = TTSModel.load_model(
+    # Pocket TTS 2.1 calls the generation parameter ``lsd_decode_steps`` while
+    # newer releases expose ``sampler_decode_steps``. Inspect the installed API
+    # and use its preferred keyword so the fork works cleanly with either line.
+    load_model = cast(Any, TTSModel.load_model)
+    decode_parameter = decode_steps_parameter(
+        inspect.signature(TTSModel.load_model).parameters
+    )
+    model = load_model(
         language=args.language,
-        lsd_decode_steps=decode_steps,
+        **{decode_parameter: decode_steps},
     ).to(args.device)
     _LOGGER.info(
         "Model loaded successfully (sample rate: %d Hz, device: %s)",
