@@ -3,241 +3,232 @@
 </p>
 
 <p align="center">
-  <strong>Fast, local text-to-speech with voice cloning for Home Assistant</strong>
+  <strong>Local Pocket TTS for Home Assistant, with quality profiles, voice selectors and voice cloning</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/araa47/wyoming_pocket_tts/actions/workflows/on-merge.yml"><img src="https://github.com/araa47/wyoming_pocket_tts/actions/workflows/on-merge.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/araa47/wyoming_pocket_tts/pkgs/container/wyoming_pocket_tts"><img src="https://img.shields.io/badge/ghcr.io-wyoming__pocket__tts-blue?logo=docker" alt="Docker"></a>
-  <a href="https://github.com/araa47/wyoming_pocket_tts/blob/main/LICENSE"><img src="https://img.shields.io/github/license/araa47/wyoming_pocket_tts" alt="License"></a>
-  <a href="https://github.com/araa47/wyoming_pocket_tts/releases"><img src="https://img.shields.io/github/v/release/araa47/wyoming_pocket_tts?include_prereleases&label=version" alt="Version"></a>
+  <a href="https://github.com/antoniorani/wyoming_pocket_tts/actions/workflows/on-merge.yml"><img src="https://github.com/antoniorani/wyoming_pocket_tts/actions/workflows/on-merge.yml/badge.svg" alt="CI"></a>
 </p>
 
-<p align="center">
-  A <a href="https://github.com/rhasspy/wyoming">Wyoming protocol</a> server for <a href="https://kyutai.org/tts">Kyutai Pocket TTS</a> — ~10x realtime on CPU, even faster with an optional NVIDIA GPU. No cloud.
-</p>
+This is a maintained personal fork of
+[`araa47/wyoming_pocket_tts`](https://github.com/araa47/wyoming_pocket_tts).
+It exposes [Kyutai Pocket TTS](https://github.com/kyutai-labs/pocket-tts)
+through the [Wyoming protocol](https://github.com/rhasspy/wyoming) for local
+text-to-speech in Home Assistant.
 
----
+## Highlights of this fork
 
-## Features
+- Fixes the optimized image startup regression caused by removing `sympy` and
+  `torch/_inductor`.
+- Adds Home Assistant-friendly **preset voice selectors**.
+- Separates **custom/cloned voices** from built-in presets.
+- Adds **quality profiles**: `fast`, `balanced`, `high`, and `maximum`.
+- Keeps the legacy `voices` field so existing 1.4.x configurations continue to
+  work when upgrading.
+- Adds English and Spanish descriptions in the Home Assistant Configuration tab.
+- Adds CI coverage for the final Docker runtime image.
 
-- **Fast** — ~10x realtime on CPU, no GPU required; ~10-12x realtime with an optional NVIDIA GPU
-- **Voice Cloning** — clone any voice from 15-30 seconds of audio
-- **Multi-language** — English, French, German, Portuguese, Italian, and Spanish
-- **Local** — 100% on-device, no cloud dependency
-- **Wyoming Compatible** — plug into Home Assistant voice pipelines
-- **Preset Voices** — expanded Pocket TTS preset catalog across supported languages
+## Recommended Spanish quality setup
 
-## Quick Start
+The defaults remain compatible with older releases so upgrades do not silently
+change language or voice. For Spanish, this is the recommended starting point:
 
-### Home Assistant Add-on
-
-1. Go to **Settings > Add-ons > Add-on Store**
-2. Click **...** > **Repositories** and add:
-   ```
-   https://github.com/araa47/wyoming_pocket_tts
-   ```
-3. Install **Wyoming Pocket TTS**
-4. In **Configuration**, choose a `language` and set `voices`
-5. Start the add-on
-6. Add the discovered Wyoming device in **Settings > Devices & Services**
-
-> First startup downloads the TTS model (~500 MB) and may take 3-5 minutes.
-> Built-in voices do not require a Hugging Face token.
-
-### Docker
-
-```bash
-docker run -d \
-  --name pocket-tts \
-  -p 10200:10200 \
-  -v pocket-tts-voices:/share/tts-voices \
-  ghcr.io/araa47/wyoming_pocket_tts:latest
-
-# For voice cloning, add your HuggingFace token:
-# -e HF_TOKEN=your_token_here
+```yaml
+language: es_24l
+preset_voices:
+  - lola
+custom_voices: []
+voices: []
+quality: high
+voices_dir: /share/tts-voices
+device: cpu
+hf_token: ""
+debug: false
 ```
 
-### Local Development
+`es_24l` is the larger Spanish model variant. Pocket TTS supports multiple
+generation/decode steps; more steps can improve quality at the cost of more CPU
+and latency. This fork maps `high` to 4 steps and `maximum` to 8.
+
+## Install in Home Assistant
+
+1. Open **Settings → Apps → Install app**.
+2. Open the repository menu and add:
+
+   ```text
+   https://github.com/antoniorani/wyoming_pocket_tts
+   ```
+
+3. Install **Wyoming Pocket TTS (antoniorani)**.
+4. Open **Configuration** and choose language, preset voices and quality.
+5. Start the App/Add-on.
+6. Configure the discovered Wyoming service under **Settings → Devices & services**.
+7. Select it as the text-to-speech engine in your Home Assistant voice assistant.
+
+The first start can take longer while Pocket TTS downloads and initializes model
+files.
+
+## Home Assistant configuration
+
+| Option | Upgrade-safe default | Purpose |
+|---|---|---|
+| `language` | `en` | Pocket TTS language/model. Use a 24-layer variant when quality is more important than latency. |
+| `preset_voices` | `[]` | Built-in voices. Each row is a dropdown; the first selected voice becomes the default. |
+| `custom_voices` | `[]` | Custom/cloned voice filenames without their extension. |
+| `voices` | `[alba]` | Legacy compatibility field from 1.4.x. New setups should normally move built-in voices to `preset_voices`. |
+| `quality` | `balanced` | Generation quality profile. |
+| `voices_dir` | `/share/tts-voices` | Folder containing custom voice samples. |
+| `device` | `cpu` | Home Assistant uses CPU. CUDA is for a separately built CUDA container. |
+| `hf_token` | empty | Hugging Face read token, required only when custom cloning weights need authentication. |
+| `debug` | `false` | Verbose server logging. |
+
+### Quality profiles
+
+| Profile | Decode steps | Intended use |
+|---|---:|---|
+| `fast` | 1 | Lowest latency. |
+| `balanced` | 2 | Moderate extra compute; upgrade-safe default. |
+| `high` | 4 | Recommended starting point when speech quality matters. |
+| `maximum` | 8 | Highest profile exposed in the add-on; expect more latency and CPU use. |
+
+The profile names and step mapping are a convenience layer in this fork. Pocket
+TTS itself exposes the underlying generation-step parameter.
+
+Standalone users can override the profile explicitly. Both flag names below are
+accepted; `--decode-steps` is the fork's version-neutral name:
 
 ```bash
-uv sync
-uv run python -m wyoming_pocket_tts --voices alba --debug
+uv run python -m wyoming_pocket_tts \
+  --language es_24l \
+  --voices lola \
+  --decode-steps 6
 ```
 
-## Requirements
+## Built-in voices
 
-| | |
+Choose a preset that matches the selected language model.
+
+| Language | Presets |
 |---|---|
-| **Disk space** | ~1.5-2 GB (Docker image ~270 MB + model ~500 MB) |
-| **Voice cloning** | Free [HuggingFace account](https://huggingface.co/join) with [accepted model terms](https://huggingface.co/kyutai/pocket-tts) |
-
-> Built-in voices work without any HuggingFace setup. A token is only needed for voice cloning.
-
-## Configuration
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `language` | `en` | TTS language/model, selected from a dropdown |
-| `voices` | `[alba]` | Voices to load. Each is **preloaded** (fast first response) and is the **only** set advertised to Home Assistant. Type a preset name or a custom sample's filename without extension (e.g. `rocky`). Leave empty to advertise every built-in + custom voice, loaded on demand |
-| `voices_dir` | `/share/tts-voices` | Directory for custom voice samples |
-| `device` | `cpu` | Inference device (`cpu` or `cuda`). Use `cuda` for GPU acceleration |
-| `hf_token` | — | HuggingFace token (custom/cloned voices only) |
-| `debug` | `false` | Enable debug logging |
-
-> **Using only a custom voice?** Put `rocky.ogg` in `/share/tts-voices`, set
-> `hf_token`, set `voices` to `rocky`, pick the matching `language`, restart, then
-> reload the Wyoming integration. Only `rocky` will be offered to Home Assistant.
-
-## GPU Acceleration
-
-CPU is the default and needs no setup. To run inference on an NVIDIA GPU
-(~10-12x realtime vs ~3-5x on CPU), set `device` to `cuda` — or pass
-`--device cuda` when running locally with a CUDA-enabled PyTorch build.
-
-For Docker, use the CUDA variant image (requires the
-[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)):
-
-```bash
-# Build the CUDA image from this repository (not published to ghcr.io)
-docker build -f Dockerfile.cuda -t pocket-tts-cuda .
-
-docker run -d \
-  --name pocket-tts \
-  --gpus all \
-  -p 10200:10200 \
-  -e DEVICE=cuda \
-  -v pocket-tts-voices:/share/tts-voices \
-  pocket-tts-cuda
-
-# For voice cloning, add your HuggingFace token:
-# -e HF_TOKEN=your_token_here
-```
-
-> **Note:** the Home Assistant add-on ships the CPU image. `cuda` requires a
-> custom Docker deployment as above.
-
-## Voices
-
-### Built-in Voices
-
-| Language | Voice names |
-|----------|-------------|
-| English | `alba`, `anna`, `azelma`, `bill_boerst`, `caro_davy`, `charles`, `cosette`, `eponine`, `eve`, `fantine`, `george`, `jane`, `jean`, `javert`, `marius`, `mary`, `michael`, `paul`, `peter_yearsley`, `stuart_bell`, `vera` |
+| Spanish | `lola` |
 | French | `estelle` |
 | German | `juergen` |
 | Portuguese | `rafael` |
 | Italian | `giovanni` |
-| Spanish | `lola` |
+| English | `alba`, `anna`, `azelma`, `bill_boerst`, `caro_davy`, `charles`, `cosette`, `eponine`, `eve`, `fantine`, `george`, `jane`, `jean`, `javert`, `marius`, `mary`, `michael`, `paul`, `peter_yearsley`, `stuart_bell`, `vera` |
 
-### Custom Voice Cloning
+## Custom / cloned voices
 
-> **Requires:** [HuggingFace token](https://huggingface.co/settings/tokens) with [accepted Pocket TTS model terms](https://huggingface.co/kyutai/pocket-tts).
+1. Put a clean voice sample in `/share/tts-voices`, for example
+   `/share/tts-voices/rocky.ogg`.
+2. Add `rocky` under **Custom / cloned voices** in the Configuration tab.
+3. If required, accept Kyutai's Pocket TTS model terms on Hugging Face and add a
+   read token to `hf_token`.
+4. Restart Wyoming Pocket TTS.
+5. Reload the Wyoming Protocol integration in Home Assistant so its cached voice
+   list is refreshed.
 
-1. Create `/share/tts-voices/` in Home Assistant if it does not exist
-2. Record 5-30 seconds of clear speech; 15-30 seconds works best
-3. Save it as `.ogg`, `.wav`, `.mp3`, `.flac`, `.m4a`, or `.safetensors`, for example `/share/tts-voices/rocky.ogg`
-4. Add your Hugging Face read token to `hf_token`
-5. Restart the add-on
-6. Reload the Wyoming integration in Home Assistant:
-   **Settings > Devices & Services > Wyoming Protocol > Pocket TTS > ... > Reload**
-7. Use the voice by filename without extension, for example `rocky`
+Supported sample types are `.wav`, `.mp3`, `.ogg`, `.flac`, `.m4a`, and
+`.safetensors`. A clean 15–30 second recording with natural intonation is a good
+starting point.
 
-Custom voice samples are encoded by the selected `language` model. Pocket TTS
-2.1.0 ships cloning-capable weight paths for the listed language configs. Those
-weights are gated by Kyutai's Hugging Face model terms; if they cannot be
-downloaded, preset voices still work and custom voices fall back to a preset with
-a warning.
+Voice cloning improves speaker identity and timbre, but it cannot remove all
+model-level prosody limitations.
 
-### Recording Tips
+## Upgrading from 1.4.9 or earlier
 
-| Aspect | Recommendation |
-|--------|----------------|
-| **Length** | 15-30 seconds works best; minimum 5 seconds |
-| **Quality** | 44.1 kHz, 16-bit, WAV or OGG preferred |
-| **Content** | Natural conversation, not scripted |
-| **Environment** | Quiet room, no echo |
-| **Style** | Varied intonation with questions and statements |
+Version 1.5.0 deliberately keeps the old `voices` option. If the new
+`preset_voices` selector is empty, the old list behaves as before.
+
+Once you select a value in `preset_voices`:
+
+- the new selector becomes authoritative for built-in presets;
+- old built-in preset names in `voices` are ignored;
+- arbitrary/custom names in `voices` are preserved;
+- names in `custom_voices` are added as well.
+
+For the recommended Spanish setup, select `es_24l`, `lola`, and `high`, then
+restart the app and reload the Wyoming integration.
 
 ## Languages
 
-Set `language` in the add-on configuration or pass `--language` when running
-locally. The default is `en`, so existing English and voice cloning setups keep
-working without any configuration change.
+| Configuration | Language | Matching preset |
+|---|---|---|
+| `en` | English | `alba` or another English preset |
+| `fr` / `fr_24l` | French | `estelle` |
+| `de` / `de_24l` | German | `juergen` |
+| `pt` / `pt_24l` | Portuguese | `rafael` |
+| `it` / `it_24l` | Italian | `giovanni` |
+| `es` / `es_24l` | Spanish | `lola` |
 
-| Code | Language | Default preset | Voice cloning |
-|------|----------|----------------|---------------|
-| `en` | English | `alba` | Supported with HF access |
-| `fr` / `fr_24l` | French | `estelle` | Supported with HF access |
-| `de` / `de_24l` | German | `juergen` | Supported with HF access |
-| `pt` / `pt_24l` | Portuguese | `rafael` | Supported with HF access |
-| `it` / `it_24l` | Italian | `giovanni` | Supported with HF access |
-| `es` / `es_24l` | Spanish | `lola` | Supported with HF access |
+## Standalone Docker
 
-**Example prompt:**
-> "Hey, so I was thinking about dinner tonight. Maybe pasta? Or we could order something. What do you think? Oh, and don't forget we have that thing tomorrow morning."
-
-## API
-
-The server speaks [Wyoming protocol](https://github.com/rhasspy/wyoming) on TCP port `10200`.
+CPU image:
 
 ```bash
-# Health check
-echo '{"type":"describe"}' | nc localhost 10200
+docker build -t wyoming-pocket-tts .
 
-# Synthesize speech
-echo '{"type":"synthesize","data":{"text":"Hello world","voice":{"name":"alba"}}}' | nc localhost 10200
+docker run --rm -p 10200:10200 \
+  -e LANGUAGE=es_24l \
+  -e QUALITY=high \
+  -e VOICES=lola \
+  wyoming-pocket-tts
 ```
+
+CUDA image for a host with the NVIDIA Container Toolkit:
+
+```bash
+docker build -f Dockerfile.cuda -t wyoming-pocket-tts-cuda .
+
+docker run --rm --gpus all -p 10200:10200 \
+  -e LANGUAGE=es_24l \
+  -e QUALITY=high \
+  -e VOICES=lola \
+  -e DEVICE=cuda \
+  wyoming-pocket-tts-cuda
+```
+
+## Development
+
+```bash
+uv sync --all-extras --dev --frozen
+uv run pytest
+uv run prek run --all-files
+```
+
+The Wyoming server listens on TCP port `10200` by default.
 
 ## Troubleshooting
 
-<details>
-<summary><strong>"Gated model" error (voice cloning only)</strong></summary>
+### Speech still sounds worse than Piper
 
-Built-in voices don't require HuggingFace access. For voice cloning:
+Start with `es_24l`, `lola`, and `high`. If latency is acceptable, compare
+`maximum`. A cloned voice can improve speaker identity, but a clone is not a
+substitute for a stronger acoustic/language model.
 
-1. Go to https://huggingface.co/kyutai/pocket-tts
-2. Log in and accept the model terms
-3. Get your token from https://huggingface.co/settings/tokens
-4. Add it to the add-on config as `hf_token`
+### Custom voice does not appear
 
-</details>
+Restart Wyoming Pocket TTS and reload the Wyoming Protocol integration. Home
+Assistant caches advertised voice names.
 
-<details>
-<summary><strong>Custom voice not appearing in Home Assistant</strong></summary>
+### Custom voice fails to load
 
-Home Assistant caches the voice list. After adding a new voice:
+Check the filename, `/share/tts-voices`, selected language, accepted model terms,
+and `hf_token` when gated cloning weights require authentication.
 
-1. Restart the Pocket TTS add-on
-2. Go to **Settings > Devices & Services > Wyoming Protocol**
-3. Click on your Pocket TTS device > **...** > **Reload**
+### Wyoming cannot connect
 
-</details>
+Check the app log for successful discovery and reload the Wyoming integration if
+necessary. This fork prefers advertising the container's IPv4 address where
+possible to avoid systems with an unreachable IPv6 route.
 
-<details>
-<summary><strong>Voice not found</strong></summary>
+## Acknowledgements and licensing
 
-- Check the filename matches (without extension)
-- Ensure the file is in the `voices_dir` path
-- Check add-on logs for loading errors
+This fork builds on
+[`araa47/wyoming_pocket_tts`](https://github.com/araa47/wyoming_pocket_tts) and
+the work of its contributors. Pocket TTS is developed by
+[Kyutai](https://kyutai.org/).
 
-</details>
-
-<details>
-<summary><strong>Slow first request</strong></summary>
-
-Each voice loads on first use (~2s). Add voice names to `preload_voices` (one per line in the add-on UI) for instant first responses without loading every voice into RAM.
-
-</details>
-
-## Acknowledgements
-
-- [Easton Potokar (@contagon)](https://github.com/contagon) — GPU/CUDA support ([#36](https://github.com/araa47/wyoming_pocket_tts/pull/36)) and safetensors voice samples ([#35](https://github.com/araa47/wyoming_pocket_tts/pull/35))
-- [Kyutai](https://kyutai.org/) — the Pocket TTS model
-- The [Wyoming](https://github.com/rhasspy/wyoming) / [Home Assistant](https://www.home-assistant.io) ecosystem
-
-## License
-
-MIT License — see [LICENSE](LICENSE).
-
-Pocket TTS is licensed under CC-BY-4.0 with usage restrictions. See the [model card](https://huggingface.co/kyutai/pocket-tts) for terms.
+The Python project metadata declares the wrapper as MIT licensed. Pocket TTS and
+its model weights have their own licensing and usage terms; review Kyutai's
+current model card and Hugging Face terms before redistribution or voice cloning.

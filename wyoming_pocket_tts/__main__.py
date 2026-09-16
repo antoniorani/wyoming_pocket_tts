@@ -3,10 +3,11 @@
 
 import argparse
 import asyncio
+import inspect
 import logging
 import os
 from functools import partial
-from typing import cast
+from typing import Any, cast
 
 from pocket_tts import TTSModel
 from wyoming.server import AsyncTcpServer
@@ -20,6 +21,11 @@ from .handler import (
     load_voice,
     normalize_language,
     plan_voices,
+)
+from .settings import (
+    QUALITY_PROFILES,
+    decode_steps_for_quality,
+    decode_steps_parameter,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -70,10 +76,29 @@ async def main() -> None:
         default="en",
         help=(
             "Language to use (default: en). Supported: en, fr, de, pt, it, es, "
-            "fr_24l, de_24l, pt_24l, "
-            "plus upstream names english, french, german, portuguese, italian, "
-            "spanish and 24l preview variants. Custom/cloned voices are loaded "
-            "through the selected language model."
+            "fr_24l, de_24l, pt_24l, it_24l, es_24l, plus upstream language "
+            "names. The 24-layer models prioritise quality over speed. Custom "
+            "voices are loaded through the selected language model."
+        ),
+    )
+    parser.add_argument(
+        "--quality",
+        default="balanced",
+        choices=tuple(QUALITY_PROFILES),
+        help=(
+            "Generation quality profile. Higher quality uses more decode steps "
+            "and is slower (default: balanced)."
+        ),
+    )
+    parser.add_argument(
+        "--decode-steps",
+        "--sampler-decode-steps",
+        dest="decode_steps",
+        type=int,
+        default=None,
+        help=(
+            "Advanced: override the quality profile with an explicit Pocket TTS "
+            "generation step count (1-32)."
         ),
     )
     parser.add_argument(
@@ -95,31 +120,47 @@ async def main() -> None:
 
     args = parser.parse_args()
 
-    # Configure logging
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    # Set HF token from environment if available
     hf_token = os.environ.get("HF_TOKEN")
     if hf_token:
         _LOGGER.info("Using HuggingFace token from environment")
         os.environ["HF_TOKEN"] = hf_token
 
+    try:
+        decode_steps = decode_steps_for_quality(args.quality, args.decode_steps)
+    except ValueError as err:
+        parser.error(str(err))
+
     _LOGGER.info("Starting Wyoming Pocket TTS server v%s", __version__)
     args.language = normalize_language(args.language)
-    _LOGGER.info("Loading Pocket TTS model for language: %s", args.language)
+    _LOGGER.info(
+        "Loading Pocket TTS model for language: %s | quality: %s | decode steps: %d",
+        args.language,
+        args.quality if args.decode_steps is None else "custom",
+        decode_steps,
+    )
 
-    # Load model
-    model = TTSModel.load_model(language=args.language).to(args.device)
+    # Pocket TTS 2.1 calls the generation parameter ``lsd_decode_steps`` while
+    # newer releases expose ``sampler_decode_steps``. Inspect the installed API
+    # and use its preferred keyword so the fork works cleanly with either line.
+    load_model = cast(Any, TTSModel.load_model)
+    decode_parameter = decode_steps_parameter(
+        inspect.signature(TTSModel.load_model).parameters
+    )
+    model = load_model(
+        language=args.language,
+        **{decode_parameter: decode_steps},
+    ).to(args.device)
     _LOGGER.info(
         "Model loaded successfully (sample rate: %d Hz, device: %s)",
         model.sample_rate,
         args.device,
     )
 
-    # Discover custom voices present in the voices directory (names only, no load).
     custom_voice_names = list_custom_voice_names(args.voices_dir)
     if custom_voice_names:
         _LOGGER.info(
@@ -129,17 +170,12 @@ async def main() -> None:
             ", ".join(custom_voice_names),
         )
 
-    # Decide which voices to preload and advertise. When `voices` is set the
-    # add-on preloads exactly those and advertises only them (the simple mode the
-    # config promotes). When empty, fall back to advertising all presets + custom
-    # files (loaded on demand), honouring the legacy --voice/--preload-voices args.
     configured = [v.strip() for v in (args.voices or "").split(",") if v.strip()]
     to_preload, available_voices, default_voice = plan_voices(
         configured, custom_voice_names, args.language
     )
 
     if not configured:
-        # Legacy / unconfigured mode: keep old preload semantics, advertise stays all.
         preload_raw = (args.preload_voices or "").strip()
         if preload_raw.lower() == "all":
             to_preload = list(dict.fromkeys(PRESET_VOICES + custom_voice_names))
@@ -150,11 +186,10 @@ async def main() -> None:
         if default_voice not in to_preload:
             to_preload.append(default_voice)
 
-    # The handler uses args.voice as the default/fallback voice name.
     args.voice = default_voice
 
     voice_states: dict = {}
-    for name in dict.fromkeys(to_preload):  # de-dup, preserve order
+    for name in dict.fromkeys(to_preload):
         state = load_voice(model, name, args.voices_dir)
         if state is not None:
             voice_states[name] = state
@@ -181,15 +216,10 @@ async def main() -> None:
         ", ".join(available_voices),
     )
 
-    # Create Wyoming info
     wyoming_info = get_wyoming_info(available_voices, args.language)
 
-    # Start server. Bind all interfaces (IPv4 + IPv6) when host is the wildcard:
-    # Home Assistant's hassio network is dual-stack and may resolve the add-on to
-    # an IPv6 address, so an IPv4-only socket would be unreachable ("Unable to
-    # connect"). host=None makes asyncio listen on every address family.
-    # asyncio accepts host=None at runtime to bind every address family, even
-    # though wyoming types the parameter as str.
+    # Bind all interfaces (IPv4 + IPv6) when host is the wildcard. Home Assistant
+    # networks can be dual-stack, while some hosts cannot actually route IPv6.
     bind_host = None if args.host in ("", "0.0.0.0", "::") else args.host
     server = AsyncTcpServer(host=cast("str", bind_host), port=args.port)
     _LOGGER.info("Server listening on %s:%d", args.host, args.port)

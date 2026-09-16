@@ -1,0 +1,55 @@
+---
+configuration:
+    language:
+        name: Modelo de idioma
+        description: >-
+            Idioma/modelo de Pocket TTS. Las variantes de 24 capas priorizan la
+            calidad de voz frente a la velocidad. Para español se recomienda
+            es_24l cuando la calidad importe más que la latencia.
+    preset_voices:
+        name: Voces predefinidas
+        description: >-
+            Selecciona una o varias voces incluidas en Pocket TTS. Cada fila es un
+            selector y la primera voz será la predeterminada. Usa lola para español,
+            estelle para francés, juergen para alemán, rafael para portugués y
+            giovanni para italiano; el resto de voces predefinidas son inglesas.
+    custom_voices:
+        name: Voces personalizadas / clonadas
+        description: >-
+            Nombres de voces personalizadas, uno por entrada. Copia el archivo de
+            audio correspondiente en la carpeta de voces y escribe aquí el nombre
+            sin extensión, por ejemplo rocky para rocky.ogg. El clonado requiere un
+            token de Hugging Face y aceptar las condiciones del modelo de Kyutai.
+    voices:
+        name: Lista de voces heredada / avanzada
+        description: >-
+            Campo libre mantenido por compatibilidad con versiones anteriores. En
+            configuraciones nuevas usa Voces predefinidas y Voces personalizadas.
+            Cuando hay voces predefinidas seleccionadas, los presets antiguos de
+            este campo se ignoran y se conservan los nombres de voces personalizadas.
+    quality:
+        name: Calidad de generación
+        description: >-
+            Perfil de calidad del muestreador de Pocket TTS. fast usa 1 paso,
+            balanced 2, high 4 y maximum 8. Más pasos pueden mejorar la calidad a
+            cambio de más CPU y latencia. high es el punto de partida recomendado.
+    voices_dir:
+        name: Carpeta de voces personalizadas
+        description: >-
+            Carpeta con las muestras de voz. Mantén /share/tts-voices en Home
+            Assistant. Se admiten wav, mp3, ogg, flac, m4a y safetensors.
+    device:
+        name: Dispositivo de inferencia
+        description: >-
+            CPU es el modo compatible con la App de Home Assistant. CUDA está pensado
+            para un contenedor CUDA construido aparte con soporte de NVIDIA.
+    hf_token:
+        name: Token de Hugging Face
+        description: >-
+            Sólo es necesario para clonar voces personalizadas. Las voces incluidas
+            funcionan sin token. Acepta antes las condiciones del modelo Pocket TTS.
+    debug:
+        name: Registro de depuración
+        description: Activa logs detallados para diagnosticar problemas.
+network:
+    10200/tcp: Protocolo Wyoming

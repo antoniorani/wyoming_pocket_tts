@@ -1,14 +1,13 @@
 ---
-# Home Assistant Add-on Configuration
-# https://developers.home-assistant.io/docs/add-ons/configuration
+# Home Assistant App Configuration
+# https://developers.home-assistant.io/docs/apps/configuration/
 
 name: Wyoming Pocket TTS (antoniorani)
-version: 1.4.9
+version: 1.5.0
 slug: wyoming_pocket_tts
 description: >-
-    Fast, local text-to-speech with voice cloning using Kyutai Pocket TTS.
-    Runs on CPU at ~10x realtime speed. Built-in voices work immediately;
-    add a Hugging Face token only when using custom voice cloning.
+    Local text-to-speech with configurable quality, preset voice selection,
+    and custom voice cloning using Kyutai Pocket TTS.
 url: https://github.com/antoniorani/wyoming_pocket_tts
 arch:
     - amd64
@@ -36,18 +35,20 @@ homeassistant_api: false
 
 # Storage
 map:
-    - share:rw # For custom voice samples in /share/tts-voices
+    - share:rw # Custom voice samples in /share/tts-voices
 
-# Configuration options exposed in UI.
-# Voice names go in `voices` — type them out (see the Documentation tab or the
-# field help for the full built-in list, or use a custom filename without its
-# extension). Each listed voice is preloaded for fast first response and is the
-# only set advertised to Home Assistant. Leave `voices` empty to fall back to
-# advertising every built-in + custom voice (loaded on demand).
+# Keep upgrade-safe defaults compatible with releases <=1.4.9. The recommended
+# Spanish quality setup is es_24l + lola + high; users can select it directly in
+# the Configuration tab after upgrading.
 options:
     language: en
+    preset_voices: []
+    custom_voices: []
+    # Backward-compatible free-form list used by releases <= 1.4.9. New installs
+    # should normally move built-in choices to preset_voices.
     voices:
         - alba
+    quality: balanced
     voices_dir: /share/tts-voices
     device: cpu
     hf_token: ''
@@ -55,8 +56,15 @@ options:
 
 schema:
     language: list(en|fr|de|pt|it|es|fr_24l|de_24l|pt_24l|it_24l|es_24l)
+    # Each array item is a Home Assistant dropdown instead of a free-text field.
+    preset_voices:
+        - list(alba|anna|azelma|bill_boerst|caro_davy|charles|cosette|eponine|eve|fantine|george|jane|jean|javert|marius|mary|michael|paul|peter_yearsley|stuart_bell|vera|estelle|juergen|rafael|giovanni|lola)
+    custom_voices:
+        - str
+    # Kept so existing saved configurations remain valid after upgrading.
     voices:
         - str
+    quality: list(fast|balanced|high|maximum)
     voices_dir: str
     device: list(cpu|cuda)
     hf_token: password?
@@ -66,6 +74,5 @@ schema:
 panel_icon: mdi:text-to-speech
 panel_title: Pocket TTS
 
-# Documentation
-# Note: Remove or comment out 'image' line for local add-on builds
-# image: ghcr.io/antoniorani/wyoming-pocket-tts-{arch}
+# Build from source in Home Assistant. For a future prebuilt multi-arch image:
+# image: ghcr.io/antoniorani/wyoming_pocket_tts
