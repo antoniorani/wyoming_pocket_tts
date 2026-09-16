@@ -1,11 +1,7 @@
 """Tests for runtime quality settings."""
 
 import pytest
-
-from wyoming_pocket_tts.settings import (
-    QUALITY_PROFILES,
-    sampler_decode_steps_for_quality,
-)
+from wyoming_pocket_tts.settings import QUALITY_PROFILES, decode_steps_for_quality
 
 
 def test_quality_profiles_increase_decode_steps():
@@ -27,19 +23,19 @@ def test_quality_profiles_increase_decode_steps():
     ],
 )
 def test_quality_profile_resolution(quality: str, steps: int):
-    assert sampler_decode_steps_for_quality(quality) == steps
+    assert decode_steps_for_quality(quality) == steps
 
 
 def test_explicit_decode_steps_override_profile():
-    assert sampler_decode_steps_for_quality("fast", override=6) == 6
+    assert decode_steps_for_quality("fast", override=6) == 6
 
 
 @pytest.mark.parametrize("steps", [0, 33])
 def test_invalid_decode_step_override_is_rejected(steps: int):
     with pytest.raises(ValueError):
-        sampler_decode_steps_for_quality("high", override=steps)
+        decode_steps_for_quality("high", override=steps)
 
 
 def test_unknown_quality_profile_is_rejected():
     with pytest.raises(ValueError):
-        sampler_decode_steps_for_quality("ultra")
+        decode_steps_for_quality("ultra")
