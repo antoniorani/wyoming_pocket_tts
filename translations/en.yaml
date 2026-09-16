@@ -1,39 +1,56 @@
 ---
-# Home Assistant add-on option names/descriptions shown in the Configuration tab.
-# https://developers.home-assistant.io/docs/add-ons/configuration#translating-add-on-options
 configuration:
     language:
-        name: Language
+        name: Language model
         description: >-
-            Pocket TTS language model to load. Pick the language that matches your
-            text and any custom voice samples. Supported: en, fr, de, pt, it, es
-            (plus the 24-layer previews fr_24l, de_24l, pt_24l, it_24l, es_24l).
+            Pocket TTS language/model. The 24-layer variants prioritise speech
+            quality over speed. For Spanish, es_24l is recommended when quality
+            matters more than latency.
+    preset_voices:
+        name: Preset voices
+        description: >-
+            Select one or more built-in Pocket TTS voices. Each row is a dropdown.
+            The first selected voice is the default. Match the voice to the language:
+            lola (Spanish), estelle (French), juergen (German), rafael (Portuguese),
+            giovanni (Italian); the remaining presets are English.
+    custom_voices:
+        name: Custom / cloned voices
+        description: >-
+            Optional custom voice names, one per entry. Put the matching audio file
+            in the custom voices folder and enter the filename without its extension,
+            for example rocky for rocky.ogg. Voice cloning requires a Hugging Face
+            token and accepted Kyutai model terms.
     voices:
-        name: Voices to load
+        name: Legacy / advanced voice list
         description: >-
-            Voices to preload (for fast first response) and advertise to Home
-            Assistant. These are the ONLY voices Home Assistant will see. Type one
-            name per entry. Built-in English: alba, anna, azelma, bill_boerst,
-            caro_davy, charles, cosette, eponine, eve, fantine, george, jane, jean,
-            javert, marius, mary, michael, paul, peter_yearsley, stuart_bell, vera.
-            Other languages: estelle (fr), juergen (de), rafael (pt), giovanni (it),
-            lola (es). Custom voice: drop a sample (e.g. rocky.ogg) in the voices
-            folder and type the filename WITHOUT its extension (rocky). Custom
-            voices need a Hugging Face token. Leave empty to advertise every
-            built-in and custom voice (loaded on demand instead of preloaded).
+            Backward-compatible free-form list used by older releases. New setups
+            should use Preset voices and Custom / cloned voices above. When preset
+            voices are selected, old built-in preset names here are ignored while
+            custom names are preserved.
+    quality:
+        name: Generation quality
+        description: >-
+            Pocket TTS sampler quality profile. fast uses 1 decode step, balanced 2,
+            high 4, and maximum 8. More steps can improve quality but increase CPU
+            usage and latency. high is the recommended starting point for natural TTS.
     voices_dir:
         name: Custom voices folder
         description: >-
-            Folder holding custom voice sample files (.ogg, .wav, .mp3, .flac,
-            .m4a). Keep /share/tts-voices for Home Assistant add-on installs.
+            Folder containing custom voice samples. Keep /share/tts-voices for Home
+            Assistant installs. Supported files include wav, mp3, ogg, flac, m4a,
+            and safetensors.
+    device:
+        name: Inference device
+        description: >-
+            CPU is the supported Home Assistant app mode. CUDA is intended for a
+            separately built CUDA container with NVIDIA runtime support.
     hf_token:
         name: Hugging Face token
         description: >-
-            Required only for custom (cloned) voices. Accept the Kyutai Pocket TTS
-            model terms on huggingface.co, then create a read token and paste it
-            here. Built-in voices work without a token.
+            Required only for custom voice cloning. Built-in voices do not need a
+            token. Accept the Kyutai Pocket TTS model terms before using cloning.
     debug:
         name: Debug logging
-        description: Show verbose logs for troubleshooting.
+        description: Enable verbose logs for troubleshooting.
 network:
     10200/tcp: Wyoming protocol
