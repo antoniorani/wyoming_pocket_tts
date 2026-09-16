@@ -87,6 +87,8 @@ async def main() -> None:
     )
     parser.add_argument(
         "--decode-steps",
+        "--sampler-decode-steps",
+        dest="decode_steps",
         type=int,
         default=None,
         help=(
