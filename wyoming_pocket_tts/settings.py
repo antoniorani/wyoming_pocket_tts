@@ -8,20 +8,19 @@ QUALITY_PROFILES: dict[str, int] = {
 }
 
 
-def sampler_decode_steps_for_quality(
+def decode_steps_for_quality(
     quality: str,
     override: "int | None" = None,
 ) -> int:
-    """Resolve a quality profile to Pocket TTS sampler decode steps.
+    """Resolve a quality profile to Pocket TTS generation decode steps.
 
-    Pocket TTS documents that additional sampler decode steps can improve
-    quality at the cost of extra computation. ``override`` is intended for
-    standalone/CLI users who want direct control while Home Assistant users can
-    choose one of the named profiles.
+    Pocket TTS documents that additional decode steps can improve quality at the
+    cost of extra computation. ``override`` is intended for standalone/CLI users
+    who want direct control while Home Assistant users can choose a named profile.
     """
     if override is not None:
         if not 1 <= override <= 32:
-            raise ValueError("sampler decode steps must be between 1 and 32")
+            raise ValueError("decode steps must be between 1 and 32")
         return override
 
     try:
