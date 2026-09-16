@@ -37,18 +37,18 @@ homeassistant_api: false
 map:
     - share:rw # Custom voice samples in /share/tts-voices
 
-# Defaults in this fork favour Spanish quality. Existing installs keep their
-# saved options when upgrading, so select es_24l/lola/high in the Configuration
-# tab if upgrading from an older release.
+# Keep upgrade-safe defaults compatible with releases <=1.4.9. The recommended
+# Spanish quality setup is es_24l + lola + high; users can select it directly in
+# the Configuration tab after upgrading.
 options:
-    language: es_24l
-    preset_voices:
-        - lola
+    language: en
+    preset_voices: []
     custom_voices: []
     # Backward-compatible free-form list used by releases <= 1.4.9. New installs
-    # should normally use preset_voices + custom_voices instead.
-    voices: []
-    quality: high
+    # should normally move built-in choices to preset_voices.
+    voices:
+        - alba
+    quality: balanced
     voices_dir: /share/tts-voices
     device: cpu
     hf_token: ''
