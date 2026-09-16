@@ -26,7 +26,7 @@ def test_hf_token_option_is_preserved():
 def test_quality_profile_is_exposed():
     """Quality must be selectable from the Home Assistant UI."""
     text = _config_text()
-    assert "quality: high" in text
+    assert "quality: balanced" in text
     assert "quality: list(fast|balanced|high|maximum)" in text
 
 
@@ -45,8 +45,9 @@ def test_custom_and_legacy_voice_paths_are_preserved():
     assert "voices:" in text
 
 
-def test_spanish_quality_defaults_for_personal_fork():
-    """Fresh installs of this fork start with the preferred Spanish setup."""
+def test_upgrade_safe_defaults_are_preserved():
+    """New option defaults must not silently change existing 1.4.x setups."""
     text = _config_text()
-    assert "language: es_24l" in text
-    assert "        - lola" in text
+    assert "language: en" in text
+    assert "preset_voices: []" in text
+    assert "    voices:\n        - alba" in text
