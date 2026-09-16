@@ -1,83 +1,120 @@
 #!/usr/bin/env bash
-# Run script for Wyoming Pocket TTS add-on
+# Run script for Wyoming Pocket TTS Home Assistant app/add-on
 set -e
 
-# Read options from Home Assistant add-on config
 CONFIG_PATH=/data/options.json
 
-# `voices` is a list; read it as a comma-separated string with jq. Older configs
-# may still carry the legacy `voice`/`preload_voices` keys, so fall back to those
-# when `voices` is empty (the server applies them only in that case).
-read_voices() {
-    jq -r 'if (.voices | type) == "array" then (.voices | join(","))
-           elif (.voices | type) == "string" then .voices
-           else "" end' "$CONFIG_PATH" 2>/dev/null
+# Read an array (or legacy string) option as comma-separated values.
+read_array_option() {
+    local key="$1"
+    jq -r --arg key "$key" '
+        if (.[$key] | type) == "array" then (.[$key] | join(","))
+        elif (.[$key] | type) == "string" then .[$key]
+        else "" end
+    ' "$CONFIG_PATH" 2>/dev/null
 }
+
 read_preload() {
     jq -r 'if (.preload_voices | type) == "array" then (.preload_voices | join(","))
            else (.preload_voices // "") end' "$CONFIG_PATH" 2>/dev/null
 }
 
-if command -v bashio &> /dev/null; then
-    LANGUAGE=$(bashio::config 'language')
-    VOICES_DIR=$(bashio::config 'voices_dir')
-    DEBUG=$(bashio::config 'debug')
-    HF_TOKEN=$(bashio::config 'hf_token')
-    DEVICE=$(bashio::config 'device')
-    VOICES=$(read_voices)
+# Join comma-separated fragments, remove empty values and de-duplicate while
+# preserving order.
+combine_csv() {
+    printf '%s\n' "$@" \
+        | tr ',' '\n' \
+        | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' \
+        | sed '/^$/d' \
+        | awk '!seen[$0]++' \
+        | paste -sd, -
+}
+
+# Releases <=1.4.9 stored preset and custom names together in `voices`. When the
+# new preset selector is used, keep arbitrary custom names from that old list but
+# discard old preset names so the selector is authoritative.
+filter_legacy_custom_voices() {
+    local raw="$1"
+    local item
+    local result=""
+
+    IFS=',' read -ra items <<< "$raw"
+    for item in "${items[@]}"; do
+        item="${item#${item%%[![:space:]]*}}"
+        item="${item%${item##*[![:space:]]}}"
+        [ -z "$item" ] && continue
+        case "$item" in
+            alba|anna|azelma|bill_boerst|caro_davy|charles|cosette|eponine|eve|fantine|george|jane|jean|javert|marius|mary|michael|paul|peter_yearsley|stuart_bell|vera|estelle|juergen|rafael|giovanni|lola)
+                ;;
+            *)
+                result=$(combine_csv "$result" "$item")
+                ;;
+        esac
+    done
+    printf '%s' "$result"
+}
+
+if [ -f "$CONFIG_PATH" ]; then
+    LANGUAGE=$(jq -r '.language // "en"' "$CONFIG_PATH")
+    QUALITY=$(jq -r '.quality // "balanced"' "$CONFIG_PATH")
+    VOICES_DIR=$(jq -r '.voices_dir // "/share/tts-voices"' "$CONFIG_PATH")
+    DEBUG=$(jq -r '.debug // false' "$CONFIG_PATH")
+    HF_TOKEN=$(jq -r '.hf_token // ""' "$CONFIG_PATH")
+    DEVICE=$(jq -r '.device // "cpu"' "$CONFIG_PATH")
+    PRESET_VOICES_CONFIG=$(read_array_option 'preset_voices')
+    CUSTOM_VOICES=$(read_array_option 'custom_voices')
+    LEGACY_VOICES=$(read_array_option 'voices')
     LEGACY_VOICE=$(jq -r '.voice // ""' "$CONFIG_PATH" 2>/dev/null)
     LEGACY_PRELOAD=$(read_preload)
 else
-    # Fallback to jq for standalone Docker
-    if [ -f "$CONFIG_PATH" ]; then
-        LANGUAGE=$(jq -r '.language // "en"' "$CONFIG_PATH")
-        VOICES_DIR=$(jq -r '.voices_dir // "/share/tts-voices"' "$CONFIG_PATH")
-        DEBUG=$(jq -r '.debug // false' "$CONFIG_PATH")
-        HF_TOKEN=$(jq -r '.hf_token // ""' "$CONFIG_PATH")
-        DEVICE=$(jq -r '.device // "cpu"' "$CONFIG_PATH")
-        VOICES=$(read_voices)
-        LEGACY_VOICE=$(jq -r '.voice // ""' "$CONFIG_PATH" 2>/dev/null)
-        LEGACY_PRELOAD=$(read_preload)
-    else
-        # Defaults for standalone usage
-        LANGUAGE="${LANGUAGE:-en}"
-        VOICES_DIR="${VOICES_DIR:-/share/tts-voices}"
-        DEBUG="${DEBUG:-false}"
-        HF_TOKEN="${HF_TOKEN:-}"
-        DEVICE="${DEVICE:-cpu}"
-        VOICES="${VOICES:-alba}"
-        LEGACY_VOICE="${LEGACY_VOICE:-}"
-        LEGACY_PRELOAD="${LEGACY_PRELOAD:-}"
-    fi
+    # Standalone Docker defaults remain conservative/backwards compatible.
+    LANGUAGE="${LANGUAGE:-en}"
+    QUALITY="${QUALITY:-balanced}"
+    VOICES_DIR="${VOICES_DIR:-/share/tts-voices}"
+    DEBUG="${DEBUG:-false}"
+    HF_TOKEN="${HF_TOKEN:-}"
+    DEVICE="${DEVICE:-cpu}"
+    PRESET_VOICES_CONFIG="${PRESET_VOICES:-}"
+    CUSTOM_VOICES="${CUSTOM_VOICES:-}"
+    LEGACY_VOICES="${VOICES:-alba}"
+    LEGACY_VOICE="${LEGACY_VOICE:-}"
+    LEGACY_PRELOAD="${LEGACY_PRELOAD:-}"
 fi
 
-# Export HuggingFace token if provided
+# New UI: selected presets are authoritative, but preserve any custom names from
+# an older combined `voices` list. If no preset selector value is present, retain
+# the legacy list exactly so upgrades remain backwards compatible.
+if [ -n "$PRESET_VOICES_CONFIG" ] && [ "$PRESET_VOICES_CONFIG" != "null" ]; then
+    LEGACY_CUSTOM_VOICES=$(filter_legacy_custom_voices "$LEGACY_VOICES")
+    VOICES=$(combine_csv "$PRESET_VOICES_CONFIG" "$CUSTOM_VOICES" "$LEGACY_CUSTOM_VOICES")
+else
+    VOICES=$(combine_csv "$LEGACY_VOICES" "$CUSTOM_VOICES")
+fi
+
+# Export Hugging Face token if provided.
 if [ -n "$HF_TOKEN" ] && [ "$HF_TOKEN" != "null" ]; then
     export HF_TOKEN
-    echo "HuggingFace token configured"
+    echo "Hugging Face token configured"
 fi
 
-# Create voices directory if it doesn't exist
 mkdir -p "$VOICES_DIR"
 
-# Build command arguments
 ARGS=(
     --host "0.0.0.0"
     --port "10200"
     --language "$LANGUAGE"
+    --quality "$QUALITY"
     --voices-dir "$VOICES_DIR"
     --device "$DEVICE"
+    --voices "$VOICES"
 )
-
-[ "$VOICES" = "null" ] && VOICES=""
-ARGS+=(--voices "$VOICES")
 
 # Legacy passthrough (used by the server only when --voices is empty).
 [ "$LEGACY_VOICE" = "null" ] && LEGACY_VOICE=""
 [ -n "$LEGACY_VOICE" ] && ARGS+=(--voice "$LEGACY_VOICE")
 case "$LEGACY_PRELOAD" in
-  true | True | TRUE) LEGACY_PRELOAD="all" ;;
-  false | False | FALSE | null) LEGACY_PRELOAD="" ;;
+    true | True | TRUE) LEGACY_PRELOAD="all" ;;
+    false | False | FALSE | null) LEGACY_PRELOAD="" ;;
 esac
 [ -n "$LEGACY_PRELOAD" ] && ARGS+=(--preload-voices "$LEGACY_PRELOAD")
 
@@ -89,6 +126,7 @@ echo "========================================"
 echo "Wyoming Pocket TTS Server"
 echo "========================================"
 echo "Language: $LANGUAGE"
+echo "Quality: $QUALITY"
 echo "Device: $DEVICE"
 echo "Voices: ${VOICES:-<all built-in + custom (on demand)>}"
 echo "Voices dir: $VOICES_DIR"
@@ -116,26 +154,14 @@ send_discovery() {
         return 1
     fi
 
-    # Small delay to ensure server is fully ready
     sleep 1
 
-    # Check if running in Home Assistant (supervisor API available)
     if [ -n "$SUPERVISOR_TOKEN" ]; then
         local hostname discovery_host ipv4
-        # Get hostname and convert underscores to hyphens for valid DNS name
-        # Home Assistant uses {REPO}_{SLUG} but DNS requires hyphens
         hostname=$(hostname | tr '_' '-')
 
-        # Prefer advertising our IPv4 address over the hostname. The hassio
-        # network is dual-stack, so the add-on hostname resolves to BOTH an IPv4
-        # and an IPv6 (ULA) address. Home Assistant Core resolves the IPv6 first;
-        # on hosts with IPv6 disabled (the common case) that address is
-        # unroutable, so Core's connection attempt hangs on a dropped SYN and
-        # times out ("Unable to connect" -> the TTS entity stays stuck
-        # "Initialising"). Advertising the IPv4 address sidesteps the broken IPv6
-        # path entirely. Binding the server to IPv6 does NOT fix this, because the
-        # route itself is unreachable. Fall back to the hostname if we cannot
-        # determine an IPv4 address.
+        # Prefer IPv4 because some Home Assistant hosts resolve the app hostname
+        # to an unreachable IPv6 address first.
         ipv4=$(hostname -i 2>/dev/null | tr ' ' '\n' \
             | grep -E '^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)' | head -n1)
         if [ -z "$ipv4" ]; then
@@ -143,14 +169,13 @@ send_discovery() {
         fi
         if [ -n "$ipv4" ]; then
             discovery_host="$ipv4"
-            echo "Advertising IPv4 address ${ipv4} for discovery (avoids unreachable IPv6 on IPv6-disabled hosts)"
+            echo "Advertising IPv4 address ${ipv4} for discovery"
         else
             discovery_host="$hostname"
-            echo "Could not determine IPv4 address; falling back to hostname ${hostname} for discovery"
+            echo "Could not determine IPv4 address; falling back to hostname ${hostname}"
         fi
         echo "Sending discovery for host: ${discovery_host}:10200"
 
-        # Retry discovery up to 3 times
         local retry=0
         local max_retries=3
         while [ $retry -lt $max_retries ]; do
@@ -164,11 +189,11 @@ send_discovery() {
             if echo "$response" | grep -q '"result".*"ok"'; then
                 echo "Successfully sent discovery information to Home Assistant"
                 return 0
-            else
-                echo "Discovery attempt $((retry + 1)) response: $response"
-                retry=$((retry + 1))
-                sleep 2
             fi
+
+            echo "Discovery attempt $((retry + 1)) response: $response"
+            retry=$((retry + 1))
+            sleep 2
         done
         echo "Warning: Failed to send discovery after ${max_retries} attempts"
     else
@@ -176,8 +201,6 @@ send_discovery() {
     fi
 }
 
-# Start discovery in background (will wait for server to be ready)
 send_discovery &
 
-# Run the server (packages installed to system Python)
 exec python3 -m wyoming_pocket_tts "${ARGS[@]}"
