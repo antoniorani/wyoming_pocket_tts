@@ -53,7 +53,9 @@ def test_new_decode_steps_parameter_is_preferred():
 
 
 def test_pocket_tts_21_decode_steps_parameter_is_supported():
-    assert decode_steps_parameter({"language", "lsd_decode_steps"}) == "lsd_decode_steps"
+    assert (
+        decode_steps_parameter({"language", "lsd_decode_steps"}) == "lsd_decode_steps"
+    )
 
 
 def test_missing_decode_steps_parameter_is_rejected():
