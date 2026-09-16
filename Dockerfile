@@ -33,11 +33,10 @@ COPY wyoming_pocket_tts/ wyoming_pocket_tts/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --no-deps .
 
-# Clean up: remove unneeded runtime packages and files in a single layer
-# Verified: pocket_tts loads fine without sympy, networkx, pygments, pip, setuptools
-RUN rm -rf /usr/local/lib/python3.13/site-packages/sympy \
-           /usr/local/lib/python3.13/site-packages/sympy-*.dist-info \
-           /usr/local/lib/python3.13/site-packages/networkx \
+# Clean up: remove unneeded runtime packages and files in a single layer.
+# Keep sympy and torch/_inductor: pocket_tts imports torch._dynamo at import
+# time through @torch.compiler.disable; current PyTorch needs both modules.
+RUN rm -rf /usr/local/lib/python3.13/site-packages/networkx \
            /usr/local/lib/python3.13/site-packages/networkx-*.dist-info \
            /usr/local/lib/python3.13/site-packages/pygments \
            /usr/local/lib/python3.13/site-packages/Pygments-*.dist-info \
@@ -47,7 +46,6 @@ RUN rm -rf /usr/local/lib/python3.13/site-packages/sympy \
            /usr/local/lib/python3.13/site-packages/setuptools-*.dist-info \
            /usr/local/lib/python3.13/site-packages/torch/include \
            /usr/local/lib/python3.13/site-packages/torch/share \
-           /usr/local/lib/python3.13/site-packages/torch/_inductor \
            /usr/local/lib/python3.13/site-packages/caffe2 \
     && find /usr/local/lib/python3.13/site-packages -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true \
     && find /usr/local/lib/python3.13/site-packages -type d -name "test" -exec rm -rf {} + 2>/dev/null || true \
